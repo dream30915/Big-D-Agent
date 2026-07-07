@@ -21,5 +21,9 @@ def test_support_keyword():
     assert classify("I need a refund for my order") is Intent.SUPPORT
 
 
+def test_code_keyword():
+    assert classify("fix this python bug for me") is Intent.CODE
+
+
 def test_default_is_chat():
     assert classify("hello, how are you?") is Intent.CHAT

@@ -29,17 +29,28 @@ async def _serve_api(host: str, port: int) -> None:
 async def _run_bot() -> None:
     # Imported here so the API can start even if telegram deps hiccup.
     from src.bot.telegram_bot import build_application
+    from src.scheduler import service as scheduler
 
+    settings = get_settings()
     application = build_application()
     await application.initialize()
     await application.start()
     await application.updater.start_polling(drop_pending_updates=True)
     logger.info("Telegram bot is polling")
+
+    # Start the scheduler once the bot can deliver results.
+    if settings.enable_scheduler:
+        async def deliver(chat_id: int, text: str) -> None:
+            await application.bot.send_message(chat_id=chat_id, text=text[:4096])
+
+        await scheduler.start(deliver)
+
     # Block forever; cancellation on shutdown stops the updater cleanly.
     try:
         await asyncio.Event().wait()
     finally:
         with contextlib.suppress(Exception):
+            await scheduler.shutdown()
             await application.updater.stop()
             await application.stop()
             await application.shutdown()

@@ -39,3 +39,24 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="tasks")
+
+
+class Schedule(Base):
+    """A recurring/one-off task the scheduler runs and delivers to the user.
+
+    We keep telegram_id + chat_id directly (not a FK) so a job can be delivered
+    without a user row, and store the trigger as a (type, arg) pair the
+    scheduler service knows how to turn into an APScheduler trigger.
+    """
+
+    __tablename__ = "schedules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    prompt: Mapped[str] = mapped_column(Text)
+    trigger_type: Mapped[str] = mapped_column(String(16))  # interval | daily | cron
+    trigger_arg: Mapped[str] = mapped_column(String(64))
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_run: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

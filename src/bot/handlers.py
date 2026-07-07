@@ -9,9 +9,13 @@ from src.agent.hermes import handle_message
 from src.config import get_settings
 from src.core import costguard
 from src.core.logging import logger
+from src.db import repository
 from src.db.repository import counts_for_admin, log_task, upsert_user
 from src.llm import credits
 from src.llm.openrouter import llm_client
+from src.integrations import n8n
+from src.scheduler import service as scheduler
+from src.scheduler.parse import SpecError, describe, parse_spec
 
 _WELCOME = (
     "🤖 *Big-D-Agent* พร้อมใช้งาน!\n\n"
@@ -28,10 +32,18 @@ _HELP = (
     "/start — เริ่มต้น / ข้อความต้อนรับ\n"
     "/help — วิธีใช้\n"
     "/ping — ตรวจว่าบอทยังตอบอยู่ไหม\n\n"
+    "*ตั้งเวลาอัตโนมัติ:*\n"
+    "/schedule `<เวลา> | <คำสั่ง>` — ตั้งงานซ้ำ\n"
+    "   เช่น `/schedule daily 09:00 | สรุปข่าว AI วันนี้`\n"
+    "   หรือ `/schedule every 30m | เช็คราคาทองคำ`\n"
+    "   หรือ `/schedule cron 0 9 * * 1 | รายงานประจำสัปดาห์`\n"
+    "/schedules — ดูงานที่ตั้งไว้\n"
+    "/unschedule `<id>` — ยกเลิกงาน\n\n"
     "*เฉพาะแอดมิน:*\n"
     "/stats — สถิติการใช้งาน\n"
     "/budget — งบ AI วันนี้\n"
-    "/credit — เครดิต OpenRouter คงเหลือ\n\n"
+    "/credit — เครดิต OpenRouter คงเหลือ\n"
+    "/n8n `<ข้อความ>` — ทริกเกอร์ workflow n8n\n\n"
     "หรือพิมพ์คุยได้เลย — ผมเลือกทักษะ (scrape/content/analyze/support) ให้อัตโนมัติ"
 )
 
@@ -94,6 +106,95 @@ async def credit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("เช็คเครดิตไม่ได้ (ตรวจ OPENROUTER_API_KEY) / can't read credit.")
     else:
         await update.message.reply_text(f"💳 OpenRouter credit: ${remaining:.4f}")
+
+
+async def schedule_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    settings = get_settings()
+    if not settings.enable_scheduler:
+        await update.message.reply_text("ระบบตั้งเวลาปิดอยู่ / scheduler is disabled.")
+        return
+    user = update.effective_user
+    chat = update.effective_chat
+    raw = (update.message.text or "").partition(" ")[2].strip()
+    if "|" not in raw:
+        await update.message.reply_markdown(
+            "รูปแบบ: `/schedule <เวลา> | <คำสั่ง>`\n"
+            "เช่น `/schedule daily 09:00 | สรุปข่าว AI วันนี้`"
+        )
+        return
+    spec_part, _, prompt = raw.partition("|")
+    prompt = prompt.strip()
+    if not prompt:
+        await update.message.reply_text("ใส่คำสั่งหลัง | ด้วยครับ / add a task after '|'.")
+        return
+    try:
+        trigger_type, trigger_arg = parse_spec(spec_part)
+    except SpecError as exc:
+        await update.message.reply_text(f"❌ {exc}")
+        return
+
+    if await repository.count_active_schedules(user.id) >= settings.max_schedules_per_user:
+        await update.message.reply_text(
+            f"ตั้งได้สูงสุด {settings.max_schedules_per_user} งาน — ลบของเก่าด้วย /unschedule ก่อน"
+        )
+        return
+
+    row = await repository.add_schedule(user.id, chat.id, prompt, trigger_type, trigger_arg)
+    if row is None:
+        await update.message.reply_text("บันทึกไม่สำเร็จ (ตรวจการเชื่อมต่อฐานข้อมูล) / DB unavailable.")
+        return
+    scheduler.add(row)
+    await update.message.reply_markdown(
+        f"✅ ตั้งงาน #{row.id} แล้ว — {describe(trigger_type, trigger_arg)}\n`{prompt[:120]}`"
+    )
+
+
+async def schedules_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    rows = await repository.list_schedules(update.effective_user.id)
+    if not rows:
+        await update.message.reply_text("ยังไม่มีงานที่ตั้งไว้ / no schedules yet.")
+        return
+    lines = [
+        f"#{r.id} · {describe(r.trigger_type, r.trigger_arg)} · {r.prompt[:60]}" for r in rows
+    ]
+    await update.message.reply_text("🗓️ งานที่ตั้งไว้:\n" + "\n".join(lines))
+
+
+async def unschedule_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    args = context.args if hasattr(context, "args") else []
+    if not args or not args[0].isdigit():
+        await update.message.reply_text("ใช้: /unschedule <id> (ดู id จาก /schedules)")
+        return
+    schedule_id = int(args[0])
+    ok = await repository.deactivate_schedule(schedule_id, update.effective_user.id)
+    if ok:
+        scheduler.remove(schedule_id)
+        await update.message.reply_text(f"🗑️ ยกเลิกงาน #{schedule_id} แล้ว")
+    else:
+        await update.message.reply_text(f"ไม่พบงาน #{schedule_id} ของคุณ / not found.")
+
+
+async def n8n_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_admin(update):
+        await update.message.reply_text("คำสั่งนี้เฉพาะแอดมิน / admin only.")
+        return
+    if not get_settings().n8n_configured:
+        await update.message.reply_text("ยังไม่ได้ตั้งค่า n8n (N8N_WEBHOOK_URL) / n8n not configured.")
+        return
+    text = (update.message.text or "").partition(" ")[2].strip()
+    if not text:
+        await update.message.reply_markdown("ใช้: `/n8n <ข้อความหรือคำสั่งส่งเข้า workflow>`")
+        return
+    user = update.effective_user
+    chat = update.effective_chat
+    payload = n8n.build_payload(
+        text, user_id=user.id if user else None, chat_id=chat.id, source="telegram"
+    )
+    result = await n8n.trigger(payload)
+    if result.ok:
+        await update.message.reply_text(f"✅ ส่งเข้า n8n แล้ว (HTTP {result.status})")
+    else:
+        await update.message.reply_text(f"❌ n8n ไม่สำเร็จ: {result.detail}")
 
 
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

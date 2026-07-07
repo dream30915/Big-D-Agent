@@ -15,7 +15,7 @@ scaffolded · 🔴 not started.
 | 6 | Cost optimization | ✅ | daily token + USD budget guard, 80%/hard-stop, per-user rate limit (`src/core/costguard.py`, ported from Hermes) |
 | 7 | Ethics & compliance | ✅ | local keyword gate (`src/core/ethics.py`) |
 | 8 | Token/usage tracking | ✅ | live counter + daily budget snapshot, exposed at `/usage`, `/budget`, `/stats` |
-| 9 | Multi-agent collaboration | 🔴 | flag `ENABLE_MULTI_AGENT` exists; no orchestration built |
+| 9 | Multi-agent collaboration | ✅ | coordinator → router(intent) → planner → specialist (`src/agent/coordinator.py`, `planner.py`, `specialists.py`); enable with `ENABLE_MULTI_AGENT=true`. Reuses cost guard + fallback |
 | 10 | Self-optimization | 🔴 | roadmap only |
 | 11 | Agent marketplace | 🔴 | roadmap only |
 | 12 | Context persistence | 🟡 | users + tasks in Postgres **+ Redis short-term conversation memory** (`src/core/memory.py`); no long-term/vector memory yet |
@@ -29,8 +29,8 @@ scaffolded · 🔴 not started.
 | 15 | Content creation | ✅ | quality-tier LLM w/ system prompt |
 | 16 | Customer service | ✅ | fast-tier LLM, escalates money/account asks |
 | 17 | Data analysis | ✅ | quality-tier LLM, refuses to fabricate numbers |
-| 18 | Task scheduling | 🔴 | roadmap only |
-| 19 | n8n integration | 🔴 | env vars present; no code |
+| 18 | Task scheduling | ✅ | APScheduler recurring/one-off jobs, persisted in Postgres, delivered via Telegram (`src/scheduler/`); `/schedule` `/schedules` `/unschedule`. Jobs run through Hermes so the cost guard applies |
+| 19 | n8n integration | ✅ | outbound webhook trigger (`src/integrations/n8n.py`); admin `/n8n` command + `POST /n8n/trigger`; Bearer + X-N8N-Api-Key auth. Inbound (n8n→bot) is a future follow-up |
 
 ## Production
 

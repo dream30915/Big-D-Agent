@@ -69,6 +69,21 @@ Telegram message
 Cost guard, rate limit, and memory all use **Redis** when available and fall
 back to in-process state if it isn't — the bot never crashes on a Redis outage.
 
+### Multi-agent mode (opt-in)
+
+Set `ENABLE_MULTI_AGENT=true` to route messages through a **coordinator** that
+picks a specialist by intent, **plans** complex tasks first, then executes.
+Off by default (single-specialist path). Both paths share the same specialist
+executor, so the cost guard, memory, and fallback behave identically either way.
+
+```
+coordinator (src/agent/coordinator.py)
+   ├─ router      → intent (src/agent/intent.py)
+   ├─ planner     → short numbered plan for complex tasks (src/agent/planner.py)
+   └─ specialist  → content / research / analysis / support / coding / general
+                    (src/agent/specialists.py — reuses skills + llm_client)
+```
+
 ## Commands
 
 | Command | Does |
@@ -76,6 +91,9 @@ back to in-process state if it isn't — the bot never crashes on a Redis outage
 | `/start` | Welcome + registers the user |
 | `/help` | Usage help |
 | `/ping` | Liveness check → `pong` |
+| `/schedule <when> \| <task>` | Schedule a recurring task (`every 30m`, `daily 09:00`, `cron 0 9 * * *`) |
+| `/schedules` | List your active schedules |
+| `/unschedule <id>` | Cancel a schedule |
 | *(any text)* | Auto-classified and handled |
 
 ## Local development (no Docker)
@@ -94,15 +112,39 @@ pytest -q                  # run tests
 src/
   main.py            entrypoint — runs FastAPI + Telegram bot on one loop
   config.py          typed settings (pydantic-settings)
-  agent/             hermes (decision engine), intent, model router
+  agent/             hermes, intent, router, + multi-agent (coordinator, planner, specialists)
   llm/               openrouter (client+fallback), pricing (USD estimate), credits
   skills/            web_scraping, browser_automation, content, support, analysis
-  bot/               telegram application + handlers (incl. admin commands)
+  bot/               telegram application + handlers (incl. admin + scheduling)
   api/app.py         FastAPI: /health, /usage, /agent, /budget, /stats, /credit
+  scheduler/         APScheduler service + schedule-spec parser
+  integrations/      n8n webhook trigger (enterprise workflows)
   db/                SQLAlchemy models, async engine, repository, schema.sql
   core/              logging, ethics, store (redis+fallback), costguard, memory
-tests/               intent, ethics, health, costguard, memory
+tests/               intent, ethics, health, costguard, memory, coordinator, schedule
 docs/                API.md, HOSTINGER_DEPLOY.md
+```
+
+### Scheduling (recurring tasks)
+
+`/schedule daily 09:00 | สรุปข่าว AI วันนี้` registers a job that runs every day
+at 09:00 (scheduler timezone, default UTC), pushes the prompt through the same
+Hermes pipeline, and delivers the result back to your chat. Schedules persist in
+Postgres and reload on restart. Spec forms: `every <N>m|h|d`, `daily HH:MM`,
+`cron <5 fields>`. Cap per user via `MAX_SCHEDULES_PER_USER`.
+
+### n8n integration (enterprise workflows)
+
+Set `N8N_WEBHOOK_URL` (and optionally `N8N_API_KEY`) to let the bot trigger n8n
+workflows. Admin `/n8n <message>` in Telegram, or `POST /n8n/trigger` on the API,
+sends a JSON payload (`source`, `text`, `user_id`, `chat_id`, plus any `extra`)
+to your n8n webhook — authenticated with both `Authorization: Bearer` and
+`X-N8N-Api-Key`. Currently outbound only (bot → n8n).
+
+```bash
+curl -s -X POST localhost:8000/n8n/trigger \
+  -H 'content-type: application/json' \
+  -d '{"text":"kick off the onboarding flow","extra":{"customer":"acme"}}'
 ```
 
 See [CLAUDE.md](CLAUDE.md) for conventions and how to extend the agent, and

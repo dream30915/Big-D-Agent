@@ -28,6 +28,12 @@ features as done.** What is actually implemented and tested:
   `/credit`; free-text handling.
 - Hermes: **rate/budget guard →** ethics gate → intent classification → model
   routing → skill/LLM, **with per-user short-term memory on the chat path**.
+- Multi-agent (opt-in via `ENABLE_MULTI_AGENT=true`): a coordinator
+  (`src/agent/coordinator.py`) that routes by intent, plans complex tasks
+  (`planner.py`), and executes via the shared specialist layer
+  (`specialists.py`). Off by default → Hermes runs the single specialist
+  directly. Both paths call `run_intent`, so there is ONE dispatch/executor —
+  don't fork it.
 - OpenRouter client with usage tracking and fast-tier fallback; every
   completion auto-records tokens + estimated USD into the cost guard.
 - Skills: `web_scraping` (BeautifulSoup) and `browser_automation` (Playwright)
@@ -39,8 +45,17 @@ features as done.** What is actually implemented and tested:
 - Conversation memory (`src/core/memory.py`): last N turns per user, Redis with
   fallback.
 - OpenRouter credit check (`src/llm/credits.py`, ported from `credit_guard.py`).
-- FastAPI: `/health`, `/usage`, `/agent`, `/budget`, `/stats`, `/credit`.
-- Postgres persistence (users, tasks) — non-fatal if the DB is down.
+- Task scheduling (`src/scheduler/`): APScheduler `AsyncIOScheduler` on the same
+  loop as the bot. Schedules are persisted in Postgres (source of truth) and
+  reloaded on startup; each job runs its prompt through Hermes (so cost guard /
+  budget apply) and delivers via Telegram. Commands: `/schedule`, `/schedules`,
+  `/unschedule`. Spec forms: `every 30m`, `daily 09:00`, `cron 0 9 * * *`.
+- n8n integration (`src/integrations/n8n.py`): outbound webhook trigger so the
+  bot / API can kick off n8n workflows. Admin `/n8n` command + `POST
+  /n8n/trigger`. Sends both `Authorization: Bearer` and `X-N8N-Api-Key`. Graceful
+  when `N8N_WEBHOOK_URL` is unset. Inbound (n8n→bot delivery) is a future item.
+- FastAPI: `/health`, `/usage`, `/agent`, `/budget`, `/stats`, `/credit`, `/n8n/trigger`.
+- Postgres persistence (users, tasks, schedules) — non-fatal if the DB is down.
 - Ethics gate (local keyword screen).
 
 **Infra failure posture (important):** all Redis/DB access goes through wrappers
@@ -48,9 +63,8 @@ that fall back gracefully (`src/core/store.py`, `src/db/repository.py`). A reply
 must never crash because Redis or Postgres is down — preserve this when editing.
 
 **Not built** (placeholders / roadmap only): payments/Stripe, subscription
-enforcement, web dashboard, agent marketplace, multi-agent orchestration,
-self-optimization, n8n workflows, scheduling. Feature flags for some of these
-exist in config but gate no real code yet.
+enforcement, web dashboard, agent marketplace, self-optimization. Some feature
+flags in config gate no real code yet.
 
 ## Conventions
 

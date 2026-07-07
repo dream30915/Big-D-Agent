@@ -14,6 +14,7 @@ from src.agent.hermes import handle_message
 from src.config import get_settings
 from src.core import costguard
 from src.db.repository import counts_for_admin
+from src.integrations import n8n
 from src.llm import credits
 from src.llm.openrouter import llm_client
 
@@ -29,6 +30,7 @@ async def health() -> dict:
         "environment": settings.environment,
         "telegram_configured": settings.telegram_configured,
         "openrouter_configured": settings.openrouter_configured,
+        "n8n_configured": settings.n8n_configured,
     }
 
 
@@ -77,3 +79,15 @@ class AgentResponse(BaseModel):
 async def agent(req: AgentRequest) -> AgentResponse:
     result = await handle_message(req.message)
     return AgentResponse(reply=result.text, intent=result.intent.value, skill=result.skill)
+
+
+class N8nRequest(BaseModel):
+    text: str
+    extra: dict | None = None
+
+
+@app.post("/n8n/trigger")
+async def n8n_trigger(req: N8nRequest) -> dict:
+    payload = n8n.build_payload(req.text, source="api", extra=req.extra)
+    result = await n8n.trigger(payload)
+    return {"ok": result.ok, "status": result.status, "detail": result.detail}
