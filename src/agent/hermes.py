@@ -4,39 +4,26 @@ Flow for every incoming message:
   1. Rate limit + daily budget guard (cheap, before any token spend).
   2. Ethics gate (refuse blocked categories).
   3. Classify intent (cheap keyword pass).
-  4. Route to a skill if the intent maps to one; otherwise answer with the LLM
-     on the intent-appropriate model tier, using the user's short-term memory.
-  5. For scraping/browsing, feed the fetched text back through the LLM so the
-     user gets a summary, not a raw dump.
+  4. Execute:
+       * ENABLE_MULTI_AGENT on  → hand to the coordinator (router → planner →
+         specialist).
+       * off → run the single specialist directly (run_intent).
+     Both reuse the same specialist layer, so cost guard / memory / fallback
+     behave identically.
 
-This is deliberately small and legible — it is the seam every advanced feature
-(multi-agent, self-optimization) will extend later.
+This is deliberately small and legible — the seam every advanced feature
+extends.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.agent import coordinator
 from src.agent.intent import Intent, classify
-from src.agent.router import model_for
+from src.agent.specialists import run_intent
 from src.config import get_settings
 from src.core import costguard, ethics, memory
 from src.core.logging import logger
-from src.llm.openrouter import LLMError, llm_client
-from src.skills import SKILLS
-
-# Which intents are served by a named skill vs. a plain LLM answer.
-_INTENT_SKILL: dict[Intent, str] = {
-    Intent.SCRAPE: "web_scraping",
-    Intent.BROWSE: "browser_automation",
-    Intent.CONTENT: "content_creation",
-    Intent.SUPPORT: "customer_service",
-    Intent.ANALYZE: "data_analysis",
-}
-
-_CHAT_SYSTEM = (
-    "You are Big-D-Agent, a capable assistant on Telegram. Be concise and "
-    "helpful. Reply in the user's language (Thai or English)."
-)
 
 
 @dataclass
@@ -81,47 +68,20 @@ async def handle_message(text: str, user_id: int | None = None) -> AgentReply:
 
     # 3. Intent.
     intent = classify(text)
-    logger.debug("intent={} for message len={}", intent, len(text))
+    logger.debug("intent={} multi_agent={}", intent, settings.enable_multi_agent)
 
-    # 4. Skill path.
-    skill_name = _INTENT_SKILL.get(intent)
-    if skill_name and skill_name in SKILLS:
-        result = await SKILLS[skill_name].run(text)
-        if not result.ok:
-            return AgentReply(text=result.text, intent=intent, skill=skill_name)
-        if intent in (Intent.SCRAPE, Intent.BROWSE):
-            summary = await _summarise(result.text, source=result.meta or {})
-            return AgentReply(text=summary, intent=intent, skill=skill_name)
-        return AgentReply(text=result.text, intent=intent, skill=skill_name)
+    # Short-term memory context (chat continuity) for the LLM specialists.
+    context = await memory.as_context(user_id) if user_id is not None else ""
 
-    # 5. Plain chat — with short-term memory for continuity.
-    system = _CHAT_SYSTEM
-    if user_id is not None:
-        context = await memory.as_context(user_id)
-        if context:
-            system = f"{_CHAT_SYSTEM}\n\n{context}"
-    try:
-        reply = await llm_client.complete(text, model=model_for(intent), system=system)
-    except LLMError as exc:
-        logger.error("chat completion failed: {}", exc)
-        return AgentReply(
-            text="ตอนนี้ AI ยังไม่พร้อม (ตรวจ OPENROUTER_API_KEY). / AI is unavailable — check OPENROUTER_API_KEY.",
-            intent=intent,
-        )
+    # 4. Execute.
+    if settings.enable_multi_agent:
+        result = await coordinator.run(text, intent)
+        reply = AgentReply(text=result.text, intent=intent, skill=result.specialist)
+    else:
+        body, skill = await run_intent(text, intent, system_extra=context)
+        reply = AgentReply(text=body, intent=intent, skill=skill)
 
-    if user_id is not None:
+    # Remember chat turns for continuity (skill replies are stateless).
+    if user_id is not None and reply.skill in (None, "GeneralSpecialist", "CodingSpecialist"):
         await memory.remember(user_id, text, reply.text)
-    return AgentReply(text=reply.text, intent=intent)
-
-
-async def _summarise(content: str, *, source: dict) -> str:
-    title = source.get("title") or source.get("url", "the page")
-    try:
-        result = await llm_client.complete(
-            f"Summarise the following page content in a few clear bullet points:\n\n{content}",
-            system="You summarise web content faithfully. Do not invent facts.",
-        )
-        return f"📄 {title}\n\n{result.text}"
-    except LLMError:
-        # No LLM? Still return something useful.
-        return f"📄 {title}\n\n{content[:800]}"
+    return reply

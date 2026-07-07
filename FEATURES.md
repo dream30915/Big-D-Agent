@@ -15,7 +15,7 @@ scaffolded · 🔴 not started.
 | 6 | Cost optimization | ✅ | daily token + USD budget guard, 80%/hard-stop, per-user rate limit (`src/core/costguard.py`, ported from Hermes) |
 | 7 | Ethics & compliance | ✅ | local keyword gate (`src/core/ethics.py`) |
 | 8 | Token/usage tracking | ✅ | live counter + daily budget snapshot, exposed at `/usage`, `/budget`, `/stats` |
-| 9 | Multi-agent collaboration | 🔴 | flag `ENABLE_MULTI_AGENT` exists; no orchestration built |
+| 9 | Multi-agent collaboration | ✅ | coordinator → router(intent) → planner → specialist (`src/agent/coordinator.py`, `planner.py`, `specialists.py`); enable with `ENABLE_MULTI_AGENT=true`. Reuses cost guard + fallback |
 | 10 | Self-optimization | 🔴 | roadmap only |
 | 11 | Agent marketplace | 🔴 | roadmap only |
 | 12 | Context persistence | 🟡 | users + tasks in Postgres **+ Redis short-term conversation memory** (`src/core/memory.py`); no long-term/vector memory yet |

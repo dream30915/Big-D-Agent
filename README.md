@@ -69,6 +69,21 @@ Telegram message
 Cost guard, rate limit, and memory all use **Redis** when available and fall
 back to in-process state if it isn't — the bot never crashes on a Redis outage.
 
+### Multi-agent mode (opt-in)
+
+Set `ENABLE_MULTI_AGENT=true` to route messages through a **coordinator** that
+picks a specialist by intent, **plans** complex tasks first, then executes.
+Off by default (single-specialist path). Both paths share the same specialist
+executor, so the cost guard, memory, and fallback behave identically either way.
+
+```
+coordinator (src/agent/coordinator.py)
+   ├─ router      → intent (src/agent/intent.py)
+   ├─ planner     → short numbered plan for complex tasks (src/agent/planner.py)
+   └─ specialist  → content / research / analysis / support / coding / general
+                    (src/agent/specialists.py — reuses skills + llm_client)
+```
+
 ## Commands
 
 | Command | Does |
@@ -94,7 +109,7 @@ pytest -q                  # run tests
 src/
   main.py            entrypoint — runs FastAPI + Telegram bot on one loop
   config.py          typed settings (pydantic-settings)
-  agent/             hermes (decision engine), intent, model router
+  agent/             hermes, intent, router, + multi-agent (coordinator, planner, specialists)
   llm/               openrouter (client+fallback), pricing (USD estimate), credits
   skills/            web_scraping, browser_automation, content, support, analysis
   bot/               telegram application + handlers (incl. admin commands)

@@ -17,6 +17,7 @@ class Intent(str, Enum):
     CONTENT = "content"
     SUPPORT = "support"
     ANALYZE = "analyze"
+    CODE = "code"
     CHAT = "chat"
 
 
@@ -34,6 +35,8 @@ _RULES: list[tuple[Intent, re.Pattern[str], tuple[str, ...]]] = [
      ("ปัญหา", "คืนเงิน")),
     (Intent.ANALYZE, re.compile(r"\b(analyze|analyse|report|revenue|profit)\b", re.I),
      ("วิเคราะห์", "กำไร")),
+    (Intent.CODE, re.compile(r"\b(code|function|debug|bug|python|javascript|regex|sql)\b", re.I),
+     ("เขียนโค้ด", "โปรแกรม")),
 ]
 
 

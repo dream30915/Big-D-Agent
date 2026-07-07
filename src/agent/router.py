@@ -13,7 +13,7 @@ from src.config import get_settings
 def model_for(intent: Intent) -> str:
     """Return the OpenRouter model id for a given intent."""
     settings = get_settings()
-    quality_intents = {Intent.CONTENT, Intent.ANALYZE}
+    quality_intents = {Intent.CONTENT, Intent.ANALYZE, Intent.CODE}
     if intent in quality_intents:
         return settings.openrouter_model_quality
     return settings.openrouter_model_fast
