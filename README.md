@@ -118,6 +118,7 @@ src/
   bot/               telegram application + handlers (incl. admin + scheduling)
   api/app.py         FastAPI: /health, /usage, /agent, /budget, /stats, /credit
   scheduler/         APScheduler service + schedule-spec parser
+  integrations/      n8n webhook trigger (enterprise workflows)
   db/                SQLAlchemy models, async engine, repository, schema.sql
   core/              logging, ethics, store (redis+fallback), costguard, memory
 tests/               intent, ethics, health, costguard, memory, coordinator, schedule
@@ -131,6 +132,20 @@ at 09:00 (scheduler timezone, default UTC), pushes the prompt through the same
 Hermes pipeline, and delivers the result back to your chat. Schedules persist in
 Postgres and reload on restart. Spec forms: `every <N>m|h|d`, `daily HH:MM`,
 `cron <5 fields>`. Cap per user via `MAX_SCHEDULES_PER_USER`.
+
+### n8n integration (enterprise workflows)
+
+Set `N8N_WEBHOOK_URL` (and optionally `N8N_API_KEY`) to let the bot trigger n8n
+workflows. Admin `/n8n <message>` in Telegram, or `POST /n8n/trigger` on the API,
+sends a JSON payload (`source`, `text`, `user_id`, `chat_id`, plus any `extra`)
+to your n8n webhook — authenticated with both `Authorization: Bearer` and
+`X-N8N-Api-Key`. Currently outbound only (bot → n8n).
+
+```bash
+curl -s -X POST localhost:8000/n8n/trigger \
+  -H 'content-type: application/json' \
+  -d '{"text":"kick off the onboarding flow","extra":{"customer":"acme"}}'
+```
 
 See [CLAUDE.md](CLAUDE.md) for conventions and how to extend the agent, and
 [docs/HOSTINGER_DEPLOY.md](docs/HOSTINGER_DEPLOY.md) to deploy on a VPS.

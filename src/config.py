@@ -83,6 +83,10 @@ class Settings(BaseSettings):
             "your_openrouter_key_here"
         )
 
+    @property
+    def n8n_configured(self) -> bool:
+        return self.n8n_webhook_url.startswith(("http://", "https://"))
+
 
 @lru_cache
 def get_settings() -> Settings:

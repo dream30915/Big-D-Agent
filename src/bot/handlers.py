@@ -13,6 +13,7 @@ from src.db import repository
 from src.db.repository import counts_for_admin, log_task, upsert_user
 from src.llm import credits
 from src.llm.openrouter import llm_client
+from src.integrations import n8n
 from src.scheduler import service as scheduler
 from src.scheduler.parse import SpecError, describe, parse_spec
 
@@ -41,7 +42,8 @@ _HELP = (
     "*เฉพาะแอดมิน:*\n"
     "/stats — สถิติการใช้งาน\n"
     "/budget — งบ AI วันนี้\n"
-    "/credit — เครดิต OpenRouter คงเหลือ\n\n"
+    "/credit — เครดิต OpenRouter คงเหลือ\n"
+    "/n8n `<ข้อความ>` — ทริกเกอร์ workflow n8n\n\n"
     "หรือพิมพ์คุยได้เลย — ผมเลือกทักษะ (scrape/content/analyze/support) ให้อัตโนมัติ"
 )
 
@@ -170,6 +172,29 @@ async def unschedule_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(f"🗑️ ยกเลิกงาน #{schedule_id} แล้ว")
     else:
         await update.message.reply_text(f"ไม่พบงาน #{schedule_id} ของคุณ / not found.")
+
+
+async def n8n_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_admin(update):
+        await update.message.reply_text("คำสั่งนี้เฉพาะแอดมิน / admin only.")
+        return
+    if not get_settings().n8n_configured:
+        await update.message.reply_text("ยังไม่ได้ตั้งค่า n8n (N8N_WEBHOOK_URL) / n8n not configured.")
+        return
+    text = (update.message.text or "").partition(" ")[2].strip()
+    if not text:
+        await update.message.reply_markdown("ใช้: `/n8n <ข้อความหรือคำสั่งส่งเข้า workflow>`")
+        return
+    user = update.effective_user
+    chat = update.effective_chat
+    payload = n8n.build_payload(
+        text, user_id=user.id if user else None, chat_id=chat.id, source="telegram"
+    )
+    result = await n8n.trigger(payload)
+    if result.ok:
+        await update.message.reply_text(f"✅ ส่งเข้า n8n แล้ว (HTTP {result.status})")
+    else:
+        await update.message.reply_text(f"❌ n8n ไม่สำเร็จ: {result.detail}")
 
 
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

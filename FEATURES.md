@@ -30,7 +30,7 @@ scaffolded · 🔴 not started.
 | 16 | Customer service | ✅ | fast-tier LLM, escalates money/account asks |
 | 17 | Data analysis | ✅ | quality-tier LLM, refuses to fabricate numbers |
 | 18 | Task scheduling | ✅ | APScheduler recurring/one-off jobs, persisted in Postgres, delivered via Telegram (`src/scheduler/`); `/schedule` `/schedules` `/unschedule`. Jobs run through Hermes so the cost guard applies |
-| 19 | n8n integration | 🔴 | env vars present; no code |
+| 19 | n8n integration | ✅ | outbound webhook trigger (`src/integrations/n8n.py`); admin `/n8n` command + `POST /n8n/trigger`; Bearer + X-N8N-Api-Key auth. Inbound (n8n→bot) is a future follow-up |
 
 ## Production
 

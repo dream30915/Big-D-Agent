@@ -83,6 +83,24 @@ curl -s -X POST localhost:8000/agent \
   -d '{"message":"write a launch caption for a coffee shop"}'
 ```
 
+## `POST /n8n/trigger`
+
+Fire the configured n8n webhook with a JSON payload.
+
+Request:
+```json
+{ "text": "kick off the onboarding flow", "extra": { "customer": "acme" } }
+```
+
+Response:
+```json
+{ "ok": true, "status": 200, "detail": "..." }
+```
+
+Returns `{"ok": false, "detail": "n8n is not configured ..."}` when
+`N8N_WEBHOOK_URL` is unset. Also available as the admin-only `/n8n` Telegram
+command.
+
 ## Notes
 
 - Without `OPENROUTER_API_KEY`, `/agent` returns a friendly "AI unavailable"

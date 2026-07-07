@@ -12,6 +12,7 @@ from src.bot.handlers import (
     budget,
     credit,
     help_command,
+    n8n_cmd,
     on_message,
     ping,
     schedule_cmd,
@@ -39,5 +40,6 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("schedule", schedule_cmd))
     app.add_handler(CommandHandler("schedules", schedules_cmd))
     app.add_handler(CommandHandler("unschedule", unschedule_cmd))
+    app.add_handler(CommandHandler("n8n", n8n_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
     return app
