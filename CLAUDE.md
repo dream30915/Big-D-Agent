@@ -19,20 +19,33 @@ are two tiers — *fast* and *quality* — chosen per intent for cost control.
 
 ## Project status — be honest about it
 
-This is **v0.1, a working foundation**, not the finished 22-feature product in
+This is **v0.2, a working foundation**, not the finished 22-feature product in
 the original master plan. When asked about a feature, check
 [FEATURES.md](FEATURES.md) and state its real status. **Do not describe planned
 features as done.** What is actually implemented and tested:
 
-- Telegram bot: `/start`, `/help`, `/ping`, free-text handling.
-- Hermes: ethics gate → intent classification → model routing → skill/LLM.
-- OpenRouter client with usage tracking and fast-tier fallback.
+- Telegram bot: `/start`, `/help`, `/ping`, plus admin `/stats`, `/budget`,
+  `/credit`; free-text handling.
+- Hermes: **rate/budget guard →** ethics gate → intent classification → model
+  routing → skill/LLM, **with per-user short-term memory on the chat path**.
+- OpenRouter client with usage tracking and fast-tier fallback; every
+  completion auto-records tokens + estimated USD into the cost guard.
 - Skills: `web_scraping` (BeautifulSoup) and `browser_automation` (Playwright)
   are real; `content_creation`, `customer_service`, `data_analysis` are real
   LLM calls with tuned system prompts.
-- FastAPI: `/health`, `/usage`, `/agent`.
+- Cost guard + rate limiting (`src/core/costguard.py`, ported from the owner's
+  Hermes `cost_guard.py`): daily token + USD budget, per-user requests/minute.
+  Backed by Redis via `src/core/store.py` with an in-process fallback.
+- Conversation memory (`src/core/memory.py`): last N turns per user, Redis with
+  fallback.
+- OpenRouter credit check (`src/llm/credits.py`, ported from `credit_guard.py`).
+- FastAPI: `/health`, `/usage`, `/agent`, `/budget`, `/stats`, `/credit`.
 - Postgres persistence (users, tasks) — non-fatal if the DB is down.
 - Ethics gate (local keyword screen).
+
+**Infra failure posture (important):** all Redis/DB access goes through wrappers
+that fall back gracefully (`src/core/store.py`, `src/db/repository.py`). A reply
+must never crash because Redis or Postgres is down — preserve this when editing.
 
 **Not built** (placeholders / roadmap only): payments/Stripe, subscription
 enforcement, web dashboard, agent marketplace, multi-agent orchestration,

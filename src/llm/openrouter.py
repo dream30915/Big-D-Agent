@@ -114,7 +114,18 @@ class OpenRouterClient:
         pt = int(usage.get("prompt_tokens", 0))
         ct = int(usage.get("completion_tokens", 0))
         self.usage.add(pt, ct)
+        await _record_cost(model, pt, ct)
         return LLMResult(text=text.strip(), model=model, prompt_tokens=pt, completion_tokens=ct)
+
+
+async def _record_cost(model: str, prompt_tokens: int, completion_tokens: int) -> None:
+    """Feed usage into the daily cost guard. Never let accounting break a reply."""
+    try:
+        from src.core import costguard  # lazy import avoids an import cycle
+
+        await costguard.record(model, prompt_tokens, completion_tokens)
+    except Exception as exc:  # pragma: no cover - accounting is best-effort
+        logger.debug("cost recording skipped: {}", exc)
 
 
 # Shared client so token usage accumulates across the process.

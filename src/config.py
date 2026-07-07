@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     environment: str = Field(default="production", alias="ENVIRONMENT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
+    # --- Cost guard / limits (ported from the owner's Hermes cost_guard) ---
+    daily_token_budget: int = Field(default=200_000, alias="DAILY_TOKEN_BUDGET")
+    daily_cost_budget_usd: float = Field(default=5.0, alias="DAILY_COST_BUDGET_USD")
+    user_rate_per_min: int = Field(default=20, alias="USER_RATE_PER_MIN")
+    memory_turns: int = Field(default=6, alias="MEMORY_TURNS")
+
     # --- Feature flags ---
     enable_multi_agent: bool = Field(default=False, alias="ENABLE_MULTI_AGENT")
     enable_marketplace: bool = Field(default=False, alias="ENABLE_MARKETPLACE")

@@ -12,6 +12,9 @@ from pydantic import BaseModel
 from src import __version__
 from src.agent.hermes import handle_message
 from src.config import get_settings
+from src.core import costguard
+from src.db.repository import counts_for_admin
+from src.llm import credits
 from src.llm.openrouter import llm_client
 
 app = FastAPI(title="Big-D-Agent", version=__version__)
@@ -38,6 +41,26 @@ async def usage() -> dict:
         "completion_tokens": u.completion_tokens,
         "total_tokens": u.total_tokens,
     }
+
+
+@app.get("/budget")
+async def budget() -> dict:
+    return await costguard.snapshot()
+
+
+@app.get("/stats")
+async def stats() -> dict:
+    u = llm_client.usage
+    return {
+        "db": await counts_for_admin(),
+        "llm": {"requests": u.requests, "total_tokens": u.total_tokens},
+        "budget": await costguard.snapshot(),
+    }
+
+
+@app.get("/credit")
+async def credit() -> dict:
+    return {"openrouter_credit_usd": await credits.remaining_usd()}
 
 
 class AgentRequest(BaseModel):

@@ -1,11 +1,12 @@
 """Hermes — the decision engine.
 
 Flow for every incoming message:
-  1. Ethics gate (refuse blocked categories).
-  2. Classify intent (cheap keyword pass).
-  3. Route to a skill if the intent maps to one; otherwise answer with the LLM
-     on the intent-appropriate model tier.
-  4. For scraping/browsing, feed the fetched text back through the LLM so the
+  1. Rate limit + daily budget guard (cheap, before any token spend).
+  2. Ethics gate (refuse blocked categories).
+  3. Classify intent (cheap keyword pass).
+  4. Route to a skill if the intent maps to one; otherwise answer with the LLM
+     on the intent-appropriate model tier, using the user's short-term memory.
+  5. For scraping/browsing, feed the fetched text back through the LLM so the
      user gets a summary, not a raw dump.
 
 This is deliberately small and legible — it is the seam every advanced feature
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 from src.agent.intent import Intent, classify
 from src.agent.router import model_for
 from src.config import get_settings
-from src.core import ethics
+from src.core import costguard, ethics, memory
 from src.core.logging import logger
 from src.llm.openrouter import LLMError, llm_client
 from src.skills import SKILLS
@@ -43,11 +44,31 @@ class AgentReply:
     text: str
     intent: Intent
     skill: str | None = None
+    blocked: str | None = None  # set when a guard refused the request
 
 
-async def handle_message(text: str) -> AgentReply:
+async def handle_message(text: str, user_id: int | None = None) -> AgentReply:
     settings = get_settings()
 
+    # 1. Guards — cheap checks before any work / token spend.
+    if user_id is not None:
+        rate = await costguard.check_rate(user_id)
+        if not rate.allowed:
+            return AgentReply(
+                text="⏳ ช้าลงหน่อยนะครับ ส่งบ่อยเกินไป / Too many requests — please slow down.",
+                intent=Intent.CHAT,
+                blocked="rate_limited",
+            )
+    budget = await costguard.check_budget()
+    if not budget.allowed:
+        logger.warning("request refused by budget guard: {}", budget.reason)
+        return AgentReply(
+            text="🛑 วันนี้ใช้งบ AI ครบแล้ว เดี๋ยวพรุ่งนี้รีเซ็ต / Daily AI budget reached — resets tomorrow.",
+            intent=Intent.CHAT,
+            blocked=budget.reason,
+        )
+
+    # 2. Ethics.
     if settings.enable_ethics_module:
         verdict = ethics.check(text)
         if not verdict.allowed:
@@ -55,35 +76,42 @@ async def handle_message(text: str) -> AgentReply:
             return AgentReply(
                 text="ขอโทษครับ ผมไม่สามารถช่วยเรื่องนี้ได้ / I can't help with that request.",
                 intent=Intent.CHAT,
+                blocked="ethics",
             )
 
+    # 3. Intent.
     intent = classify(text)
     logger.debug("intent={} for message len={}", intent, len(text))
 
+    # 4. Skill path.
     skill_name = _INTENT_SKILL.get(intent)
     if skill_name and skill_name in SKILLS:
         result = await SKILLS[skill_name].run(text)
         if not result.ok:
             return AgentReply(text=result.text, intent=intent, skill=skill_name)
-        # For fetched content, summarise; content/support/analysis skills already
-        # return finished text.
         if intent in (Intent.SCRAPE, Intent.BROWSE):
             summary = await _summarise(result.text, source=result.meta or {})
             return AgentReply(text=summary, intent=intent, skill=skill_name)
         return AgentReply(text=result.text, intent=intent, skill=skill_name)
 
-    # Plain chat.
+    # 5. Plain chat — with short-term memory for continuity.
+    system = _CHAT_SYSTEM
+    if user_id is not None:
+        context = await memory.as_context(user_id)
+        if context:
+            system = f"{_CHAT_SYSTEM}\n\n{context}"
     try:
-        reply = await llm_client.complete(
-            text, model=model_for(intent), system=_CHAT_SYSTEM
-        )
-        return AgentReply(text=reply.text, intent=intent)
+        reply = await llm_client.complete(text, model=model_for(intent), system=system)
     except LLMError as exc:
         logger.error("chat completion failed: {}", exc)
         return AgentReply(
             text="ตอนนี้ AI ยังไม่พร้อม (ตรวจ OPENROUTER_API_KEY). / AI is unavailable — check OPENROUTER_API_KEY.",
             intent=intent,
         )
+
+    if user_id is not None:
+        await memory.remember(user_id, text, reply.text)
+    return AgentReply(text=reply.text, intent=intent)
 
 
 async def _summarise(content: str, *, source: dict) -> str:

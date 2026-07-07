@@ -26,6 +26,37 @@ Token/request counters for the current process lifetime.
 { "requests": 12, "prompt_tokens": 3400, "completion_tokens": 1800, "total_tokens": 5200 }
 ```
 
+## `GET /budget`
+
+Today's spend against the daily caps (resets each UTC day).
+
+```json
+{ "date": "2026-07-07", "tokens": 1500, "token_budget": 200000,
+  "cost_usd": 0.01, "cost_budget_usd": 5.0 }
+```
+
+## `GET /stats`
+
+Aggregate view: DB user/task counts, LLM usage since boot, and today's budget.
+
+```json
+{ "db": {"users": 3, "tasks": 12},
+  "llm": {"requests": 12, "total_tokens": 5200},
+  "budget": {"date": "2026-07-07", "tokens": 5200, "token_budget": 200000,
+             "cost_usd": 0.02, "cost_budget_usd": 5.0} }
+```
+
+## `GET /credit`
+
+Remaining OpenRouter credit in USD (`null` if unreadable / no key).
+
+```json
+{ "openrouter_credit_usd": 8.42 }
+```
+
+> These three are also available as **admin-only** Telegram commands: `/stats`,
+> `/budget`, `/credit` (restricted to `TELEGRAM_ADMIN_ID`).
+
 ## `POST /agent`
 
 Run one message through the same Hermes engine the Telegram bot uses.

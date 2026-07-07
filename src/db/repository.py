@@ -2,7 +2,7 @@
 outage never breaks a chat reply."""
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.core.logging import logger
 from src.db.database import SessionLocal
@@ -38,3 +38,15 @@ async def log_task(telegram_id: int, intent: str, skill: str | None, prompt: str
             await session.commit()
     except Exception as exc:
         logger.debug("log_task skipped: {}", exc)
+
+
+async def counts_for_admin() -> dict[str, int]:
+    """User + task totals for /stats. Returns zeros if the DB is unavailable."""
+    try:
+        async with SessionLocal() as session:
+            users = await session.scalar(select(func.count()).select_from(User)) or 0
+            tasks = await session.scalar(select(func.count()).select_from(Task)) or 0
+            return {"users": int(users), "tasks": int(tasks)}
+    except Exception as exc:
+        logger.debug("counts_for_admin skipped: {}", exc)
+        return {"users": 0, "tasks": 0}

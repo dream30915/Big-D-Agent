@@ -6,10 +6,12 @@ right cost/quality model tier on **OpenRouter**, and handled by pluggable
 ships with a **FastAPI** service (`/health`, `/usage`, `/agent`), **Postgres**
 persistence, and **Redis**, all wired for `docker compose up`.
 
-> Status: **v0.1 — working foundation.** The core loop (Telegram → Hermes →
-> OpenRouter/skills → reply) is implemented and tested. Advanced features from
-> the roadmap (payments, marketplace, multi-agent, dashboard) are **not** built
-> yet — see [FEATURES.md](FEATURES.md) for the honest status of each.
+> Status: **v0.2 — working foundation.** The core loop (Telegram → Hermes →
+> OpenRouter/skills → reply) is implemented and tested, now with a **cost guard**
+> (daily token/USD budget + per-user rate limit), **Redis-backed conversation
+> memory**, and **admin stats/credit** commands. Advanced features from the
+> roadmap (payments, marketplace, multi-agent, dashboard) are **not** built yet
+> — see [FEATURES.md](FEATURES.md) for the honest status of each.
 
 ## Quick start (local, Docker)
 
@@ -46,13 +48,26 @@ Telegram message
       │
       ▼
   Hermes (src/agent/hermes.py)
-      ├─ 1. ethics gate        (src/core/ethics.py)
-      ├─ 2. classify intent    (src/agent/intent.py)     ← cheap, no tokens
-      ├─ 3. route to model     (src/agent/router.py)     ← fast vs quality tier
-      └─ 4. run skill or chat  (src/skills/*, src/llm/openrouter.py)
+      ├─ 1. rate + budget guard (src/core/costguard.py)   ← before any spend
+      ├─ 2. ethics gate         (src/core/ethics.py)
+      ├─ 3. classify intent     (src/agent/intent.py)     ← cheap, no tokens
+      ├─ 4. route to model      (src/agent/router.py)     ← fast vs quality tier
+      └─ 5. run skill or chat   (src/skills/*, src/llm/openrouter.py)
+      │        └─ chat uses per-user memory (src/core/memory.py)
       ▼
-   reply (Telegram + persisted to Postgres)
+   reply (Telegram + persisted to Postgres; tokens/cost recorded)
 ```
+
+### Commands & endpoints added in v0.2
+
+| Admin command | API endpoint | Shows |
+|---------------|-------------|-------|
+| `/stats` | `GET /stats` | user/task counts, LLM usage, today's budget |
+| `/budget` | `GET /budget` | today's token/USD spend vs caps |
+| `/credit` | `GET /credit` | remaining OpenRouter credit (USD) |
+
+Cost guard, rate limit, and memory all use **Redis** when available and fall
+back to in-process state if it isn't — the bot never crashes on a Redis outage.
 
 ## Commands
 
@@ -80,13 +95,13 @@ src/
   main.py            entrypoint — runs FastAPI + Telegram bot on one loop
   config.py          typed settings (pydantic-settings)
   agent/             hermes (decision engine), intent, model router
-  llm/openrouter.py  OpenRouter client + usage tracking + fallback
+  llm/               openrouter (client+fallback), pricing (USD estimate), credits
   skills/            web_scraping, browser_automation, content, support, analysis
-  bot/               telegram application + handlers
-  api/app.py         FastAPI: /health, /usage, /agent
+  bot/               telegram application + handlers (incl. admin commands)
+  api/app.py         FastAPI: /health, /usage, /agent, /budget, /stats, /credit
   db/                SQLAlchemy models, async engine, repository, schema.sql
-  core/              logging, ethics gate
-tests/               intent, ethics, health
+  core/              logging, ethics, store (redis+fallback), costguard, memory
+tests/               intent, ethics, health, costguard, memory
 docs/                API.md, HOSTINGER_DEPLOY.md
 ```
 

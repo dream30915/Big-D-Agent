@@ -12,13 +12,13 @@ scaffolded · 🔴 not started.
 | 3 | OpenRouter integration | ✅ | HTTP client, usage tracking, fast-tier fallback (`src/llm/openrouter.py`) |
 | 4 | Intent classification | ✅ | keyword pass, EN + TH (`src/agent/intent.py`) |
 | 5 | Model routing (fast/quality) | ✅ | per-intent tiers (`src/agent/router.py`) |
-| 6 | Cost optimization | 🟡 | free keyword routing + tier selection; no hard budget caps yet |
+| 6 | Cost optimization | ✅ | daily token + USD budget guard, 80%/hard-stop, per-user rate limit (`src/core/costguard.py`, ported from Hermes) |
 | 7 | Ethics & compliance | ✅ | local keyword gate (`src/core/ethics.py`) |
-| 8 | Token/usage tracking | ✅ | process-lifetime counter, exposed at `/usage` |
+| 8 | Token/usage tracking | ✅ | live counter + daily budget snapshot, exposed at `/usage`, `/budget`, `/stats` |
 | 9 | Multi-agent collaboration | 🔴 | flag `ENABLE_MULTI_AGENT` exists; no orchestration built |
 | 10 | Self-optimization | 🔴 | roadmap only |
 | 11 | Agent marketplace | 🔴 | roadmap only |
-| 12 | Context persistence | 🟡 | users + tasks persisted (Postgres); no long-term memory yet |
+| 12 | Context persistence | 🟡 | users + tasks in Postgres **+ Redis short-term conversation memory** (`src/core/memory.py`); no long-term/vector memory yet |
 
 ## Automation / skills
 
@@ -36,9 +36,11 @@ scaffolded · 🔴 not started.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 20 | FastAPI endpoints | ✅ | `/health` `/usage` `/agent` (`src/api/app.py`) |
-| 21 | Docker deployment | ✅ | `docker-compose.yml` (bot + Postgres + Redis) + `Dockerfile` |
-| 22 | Logging & analytics | 🟡 | structured logging (loguru) + task log table; no analytics UI |
+| 20 | FastAPI endpoints | ✅ | `/health` `/usage` `/agent` `/budget` `/stats` `/credit` (`src/api/app.py`) |
+| 21 | Docker deployment | ✅ | `docker-compose.yml` (bot + Postgres + Redis) + `Dockerfile`; **Redis now wired** for memory + limits |
+| 22 | Logging & analytics | 🟡 | structured logging (loguru) + task log table + `/stats` aggregation + admin `/stats` command; no analytics UI |
+| — | Usage limits per plan | 🟡 | daily budget + per-user rate limit enforced; not yet differentiated per subscription plan |
+| — | Credit monitoring | ✅ | OpenRouter credit check (`/credit` + admin command), ported from Hermes `credit_guard.py` |
 | — | Subscription plans / Stripe | 🔴 | intentionally deferred — no payment code |
 | — | Web dashboard | 🔴 | roadmap only |
 
