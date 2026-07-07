@@ -1,0 +1,60 @@
+# Big-D-Agent — full stack: bot+API, Postgres, Redis.
+# `docker compose up -d` then `curl http://localhost:8000/health`.
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: big_d_agent_postgres
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-changeme}
+      POSTGRES_DB: ${DATABASE_NAME:-big_d_agent}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Bind to localhost only — do not expose Postgres to the public internet.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [big_d_network]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: big_d_agent_redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [big_d_network]
+    restart: unless-stopped
+
+  bot:
+    build: .
+    container_name: big_d_agent_bot
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Expose the API/health port. Front with nginx+TLS in production.
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks: [big_d_network]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  big_d_network:
+    driver: bridge

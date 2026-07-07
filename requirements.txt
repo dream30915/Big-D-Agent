@@ -1,0 +1,34 @@
+# --- Core bot / async ---
+python-telegram-bot==21.6
+httpx==0.27.2
+aiohttp==3.10.10
+
+# --- LLM ---
+# OpenRouter is called over plain HTTP via httpx (openai-compatible schema),
+# so no vendor SDK is required.
+
+# --- Web / API ---
+fastapi==0.115.4
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# --- Database ---
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.13.3
+
+# --- Cache / queue ---
+redis==5.2.0
+
+# --- Skills ---
+beautifulsoup4==4.12.3
+playwright==1.48.0
+
+# --- Config / logging ---
+python-dotenv==1.0.1
+loguru==0.7.2
+
+# --- Dev / test ---
+pytest==8.3.3
+pytest-asyncio==0.24.0
