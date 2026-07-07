@@ -1,7 +1,7 @@
 # --- Core bot / async ---
 python-telegram-bot==21.6
 httpx==0.27.2
-aiohttp==3.10.10
+aiohttp==3.14.1
 
 # --- LLM ---
 # OpenRouter is called over plain HTTP via httpx (openai-compatible schema),
@@ -26,9 +26,9 @@ beautifulsoup4==4.12.3
 playwright==1.48.0
 
 # --- Config / logging ---
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 loguru==0.7.2
 
 # --- Dev / test ---
-pytest==8.3.3
+pytest==9.0.3
 pytest-asyncio==0.24.0
