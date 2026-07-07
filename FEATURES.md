@@ -29,7 +29,7 @@ scaffolded · 🔴 not started.
 | 15 | Content creation | ✅ | quality-tier LLM w/ system prompt |
 | 16 | Customer service | ✅ | fast-tier LLM, escalates money/account asks |
 | 17 | Data analysis | ✅ | quality-tier LLM, refuses to fabricate numbers |
-| 18 | Task scheduling | 🔴 | roadmap only |
+| 18 | Task scheduling | ✅ | APScheduler recurring/one-off jobs, persisted in Postgres, delivered via Telegram (`src/scheduler/`); `/schedule` `/schedules` `/unschedule`. Jobs run through Hermes so the cost guard applies |
 | 19 | n8n integration | 🔴 | env vars present; no code |
 
 ## Production

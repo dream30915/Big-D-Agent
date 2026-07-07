@@ -21,6 +21,9 @@ alembic==1.13.3
 # --- Cache / queue ---
 redis==5.2.0
 
+# --- Scheduling ---
+APScheduler==3.10.4
+
 # --- Skills ---
 beautifulsoup4==4.12.3
 playwright==1.48.0

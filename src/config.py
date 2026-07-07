@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     user_rate_per_min: int = Field(default=20, alias="USER_RATE_PER_MIN")
     memory_turns: int = Field(default=6, alias="MEMORY_TURNS")
 
+    # --- Scheduler ---
+    enable_scheduler: bool = Field(default=True, alias="ENABLE_SCHEDULER")
+    scheduler_timezone: str = Field(default="UTC", alias="SCHEDULER_TIMEZONE")
+    max_schedules_per_user: int = Field(default=10, alias="MAX_SCHEDULES_PER_USER")
+
     # --- Feature flags ---
     enable_multi_agent: bool = Field(default=False, alias="ENABLE_MULTI_AGENT")
     enable_marketplace: bool = Field(default=False, alias="ENABLE_MARKETPLACE")

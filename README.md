@@ -91,6 +91,9 @@ coordinator (src/agent/coordinator.py)
 | `/start` | Welcome + registers the user |
 | `/help` | Usage help |
 | `/ping` | Liveness check → `pong` |
+| `/schedule <when> \| <task>` | Schedule a recurring task (`every 30m`, `daily 09:00`, `cron 0 9 * * *`) |
+| `/schedules` | List your active schedules |
+| `/unschedule <id>` | Cancel a schedule |
 | *(any text)* | Auto-classified and handled |
 
 ## Local development (no Docker)
@@ -112,13 +115,22 @@ src/
   agent/             hermes, intent, router, + multi-agent (coordinator, planner, specialists)
   llm/               openrouter (client+fallback), pricing (USD estimate), credits
   skills/            web_scraping, browser_automation, content, support, analysis
-  bot/               telegram application + handlers (incl. admin commands)
+  bot/               telegram application + handlers (incl. admin + scheduling)
   api/app.py         FastAPI: /health, /usage, /agent, /budget, /stats, /credit
+  scheduler/         APScheduler service + schedule-spec parser
   db/                SQLAlchemy models, async engine, repository, schema.sql
   core/              logging, ethics, store (redis+fallback), costguard, memory
-tests/               intent, ethics, health, costguard, memory
+tests/               intent, ethics, health, costguard, memory, coordinator, schedule
 docs/                API.md, HOSTINGER_DEPLOY.md
 ```
+
+### Scheduling (recurring tasks)
+
+`/schedule daily 09:00 | สรุปข่าว AI วันนี้` registers a job that runs every day
+at 09:00 (scheduler timezone, default UTC), pushes the prompt through the same
+Hermes pipeline, and delivers the result back to your chat. Schedules persist in
+Postgres and reload on restart. Spec forms: `every <N>m|h|d`, `daily HH:MM`,
+`cron <5 fields>`. Cap per user via `MAX_SCHEDULES_PER_USER`.
 
 See [CLAUDE.md](CLAUDE.md) for conventions and how to extend the agent, and
 [docs/HOSTINGER_DEPLOY.md](docs/HOSTINGER_DEPLOY.md) to deploy on a VPS.
