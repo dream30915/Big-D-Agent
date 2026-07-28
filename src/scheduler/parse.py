@@ -53,6 +53,8 @@ def describe(trigger_type: str, trigger_arg: str) -> str:
     """Human-readable one-liner for a stored trigger."""
     if trigger_type == "interval":
         secs = int(trigger_arg)
+        if secs % 86400 == 0:
+            return f"ทุก {secs // 86400} วัน"
         if secs % 3600 == 0:
             return f"ทุก {secs // 3600} ชม."
         return f"ทุก {secs // 60} นาที"

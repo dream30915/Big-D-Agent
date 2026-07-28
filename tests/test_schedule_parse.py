@@ -46,3 +46,13 @@ def test_case_insensitive():
 def test_describe_interval_and_daily():
     assert "ชม." in describe("interval", "7200")
     assert "09:00" in describe("daily", "09:00")
+
+
+def test_describe_interval_days():
+    # 'every 1d' -> 86400s should read as days, not "24 ชม."
+    assert describe("interval", "86400") == "ทุก 1 วัน"
+    assert describe("interval", "172800") == "ทุก 2 วัน"
+
+
+def test_describe_interval_minutes():
+    assert describe("interval", "1800") == "ทุก 30 นาที"
